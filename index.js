@@ -35,11 +35,13 @@ app.get('/api/persons/:id', (request, response) => {
   const { id } = request.params
   const person = persons.find(person => person.id === id)
 
-  if (person) {
-    response.json(person)
-  } else {
-    response.status(404).send(`Person with id ${id} not found`)
+  if (!person) {
+    return response.status(404).json({
+      error: `Person with id ${id} not found`
+    })
   }
+  
+  response.json(person)
 })
 
 app.post('/api/persons', (req, res) => {

@@ -4,6 +4,8 @@ const morgan = require('morgan')
 const cors = require('cors')
 const app = express()
 
+require('dotenv').config()
+
 app.use(express.json())
 app.use(cors())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
@@ -14,7 +16,7 @@ morgan.token('body', (req, res, body) => {
   return JSON.stringify(req.body);
 })
 
-const mongoUrl = process.env.MONGODB_URI
+const mongoUrl = process.env.MONGO_URI
 
 mongoose.set('strictQuery',false)
 mongoose.connect(mongoUrl)
@@ -50,8 +52,8 @@ let persons = [
 ]
 
 app.get('/api/persons', (request, response) => {
-  console.log(persons)
   Person.find({}).then(persons => {
+    console.log(persons)
     response.json(persons)
   })
 })

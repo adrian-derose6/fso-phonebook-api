@@ -3,30 +3,17 @@ const mongoose = require('mongoose')
 const morgan = require('morgan')
 const cors = require('cors')
 const app = express()
-
 require('dotenv').config()
+const Person = require('./models/person')
 
 app.use(express.json())
 app.use(cors())
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 app.use(express.static('dist'))
 
-
 morgan.token('body', (req, res, body) => {
   return JSON.stringify(req.body);
 })
-
-const mongoUrl = process.env.MONGO_URI
-
-mongoose.set('strictQuery',false)
-mongoose.connect(mongoUrl)
-
-const personSchema = new mongoose.Schema({
-    name: String,
-    number: String
-})
-
-const Person = mongoose.model('Person', personSchema)
 
 let persons = [
     { 
@@ -51,24 +38,31 @@ let persons = [
     }
 ]
 
-app.get('/api/persons', (request, response) => {
+app.get('/api/persons', (req, res) => {
   Person.find({}).then(persons => {
     console.log(persons)
-    response.json(persons)
+    res.json(persons)
+  }).catch(error => {
+    console.log(error)
+    res.status(500).json({ message: 'Error getting persons' })
   })
 })
 
-app.get('/api/persons/:id', (request, response) => {
-  const { id } = request.params
-  const person = persons.find(person => person.id === id)
-
-  if (!person) {
-    return response.status(404).json({
-      error: `Person with id ${id} not found`
-    })
-  }
-  
-  response.json(person)
+app.get('/api/persons/:id', (req, res) => {
+  const { id } = req.params
+  Person.findById(id).then(person => {
+    if (person) {
+      res.json(person)
+    } else {
+      res.status(404).json({
+        message: 'Person not found'
+      })
+    }
+    
+  }).catch(error => {
+    console.log(error)
+    res.status(500).json({ message: 'Error fetching person', error })
+  })
 })
 
 app.post('/api/persons', (req, res) => {
@@ -76,51 +70,67 @@ app.post('/api/persons', (req, res) => {
 
   if (!name || !number) {
     return res.status(400).json({
-      error: 'Name or number missing'
+      message: 'Name or number missing'
     })
   } 
 
-  const nameExists = persons.find(person => person.name === name)
-  if (Boolean(nameExists)) {
+  const existingPersons = Person.find({ name }).then(persons => {
+    console.log(persons)
+    return persons;
+  }).catch(error => {
+    console.log(error)
+    res.status(500).json({ message: 'Error fetching matching persons', error})
+  })  
+
+  if (existingPersons.length > 0) {
     return res.status(400).json({
-      error: 'Name must be unique'
+      message: 'Name must be unique'
     })
   }
 
-  const newPerson = {
-    id: Math.floor(Math.random() * 1000).toString(),
+  const person = new Person({
     name, 
     number
-  }
+  })
 
-  persons = persons.concat(newPerson);
-  res.status(201).json(newPerson)
+  person.save().then(savedPerson => {
+    res.status(201).json(savedPerson)
+  }).catch(error => {
+    console.log(error)
+    res.status(500).json({
+      message: 'Error saving new person',
+      error
+    })
+  })
 })
 
-app.get('/info', (request, response) => {
-  const numberOfPersons = persons.length;
+app.get('/info', (req, res) => {
+  const numberOfPersons = Person.find({}).then(persons => persons.length)
   const reqTime = new Date(Date.now()).toUTCString()
 
-  response.send(`
+  res.send(`
     <div>
       <p>Phonebook has info for ${numberOfPersons}</p>
       <p>${reqTime}</p>
     </div>`)
 })
 
-app.delete('/api/persons/:id', (request, response) => {
-  const { id } = request.params
-  const person = persons.find(person => person.id == id)
-
-  if (!person) {
-    return response.status(404).send(`Could not find person with id ${person.id}`)
-  }
-
-  persons = persons.filter(person => person.id !== id)
-  response.status(204).send(`${person.name} has been deleted`)
+app.delete('/api/persons/:id', (req, res) => {
+  const { id } = req.params
+  
+  Person.findByIdAndDelete(id).then(deletedPerson => {
+    if (deletedPerson) {
+      res.json({ message: `${deletedPerson.name} has been deleted`, data: deletedPerson })
+    } else {
+      res.status(404).json({ message: 'Person not found' })
+    }
+  }).catch(err => {
+    console.log(error)
+    res.status(500).json({ message: 'Error deleting person', error })
+  })
 })
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
